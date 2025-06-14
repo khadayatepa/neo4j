@@ -1,25 +1,3 @@
-import streamlit as st
-from neo4j import GraphDatabase
-from pyvis.network import Network
-import streamlit.components.v1 as components
-import tempfile
-import os
-import random
-
-# Load Neo4j credentials from secrets.toml
-uri = st.secrets["neo4j"]["uri"]
-username = st.secrets["neo4j"]["username"]
-password = st.secrets["neo4j"]["password"]
-
-# Connect to Neo4j
-driver = GraphDatabase.driver(uri, auth=(username, password))
-
-# Run Cypher query
-def run_query(query):
-    with driver.session() as session:
-        return list(session.run(query))
-
-# Build colorful Pyvis graph
 def visualize_graph(results):
     net = Network(
         height="800px",
@@ -34,7 +12,7 @@ def visualize_graph(results):
 
     def get_color(label):
         if label not in label_colors:
-            # Vibrant color for each label
+            # Assign vibrant random color
             label_colors[label] = "#%06x" % random.randint(0x444444, 0xFFFFFF)
         return label_colors[label]
 
@@ -64,16 +42,18 @@ def visualize_graph(results):
                         color={"color": "#%06x" % random.randint(0x666666, 0xFFFFFF)}
                     )
 
+    # Force background using vis.js options
     net.set_options("""
     var options = {
       layout: { improvedLayout: true },
       nodes: {
         shape: 'dot',
-        size: 22,
+        size: 20,
         font: { size: 16, color: '#ffffff' },
         borderWidth: 2
       },
       edges: {
+        color: { color: '#999999' },
         width: 2,
         smooth: {
           type: "dynamic",
@@ -95,29 +75,5 @@ def visualize_graph(results):
       }
     }
     """)
+
     return net
-
-# Streamlit UI
-st.set_page_config(layout="wide")
-st.title("🌈 Neo4j + Streamlit + Pyvis — Colorful Graph Viewer")
-
-query = st.text_area("Enter Cypher Query", "MATCH p=(a)-[r]->(b) RETURN p LIMIT 25")
-
-if st.button("Run Query"):
-    try:
-        results = run_query(query)
-        st.success("✅ Query executed successfully!")
-
-        net = visualize_graph(results)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
-            path = tmp_file.name
-            net.save_graph(path)
-            with open(path, 'r', encoding='utf-8') as f:
-                html = f.read()
-
-        components.html(html, height=850, width=1200, scrolling=False)
-        os.unlink(path)
-
-    except Exception as e:
-        st.error(f"❌ Error: {e}")
