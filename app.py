@@ -14,7 +14,7 @@ def run_query(query, parameters=None):
         result = session.run(query, parameters or {})
         return [record.data() for record in result]
 
-st.title("Neo4j + Streamlit Demo")
+st.title("Neo4j Graph Database + Streamlit Demo")
 
 query = st.text_area("Cypher Query", "MATCH (n) RETURN n LIMIT 5")
 
