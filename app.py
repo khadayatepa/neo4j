@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 import tempfile
 import os
 
-# Load Neo4j credentials
+# Load Neo4j credentials from secrets
 uri = st.secrets["neo4j"]["uri"]
 username = st.secrets["neo4j"]["username"]
 password = st.secrets["neo4j"]["password"]
@@ -13,12 +13,19 @@ password = st.secrets["neo4j"]["password"]
 # Connect to Neo4j
 driver = GraphDatabase.driver(uri, auth=(username, password))
 
+# Run query
 def run_query(query):
     with driver.session() as session:
         return list(session.run(query))
 
+# Build a Pyvis graph from Neo4j results
 def visualize_graph(results):
-    net = Network(height="600px", width="100%", notebook=False)
+    net = Network(
+        height="800px", width="100%",
+        bgcolor="#ffffff", font_color="black", notebook=False
+    )
+
+    net.barnes_hut()  # Force-directed layout
 
     nodes = set()
     for record in results:
@@ -31,24 +38,72 @@ def visualize_graph(results):
                     label = list(node.labels)[0] if node.labels else "Node"
                     props = dict(node)
                     title = "<br>".join(f"{k}: {v}" for k, v in props.items())
+
                     if node_id not in nodes:
-                        net.add_node(node_id, label=label, title=title)
+                        net.add_node(
+                            node_id,
+                            label=props.get("name", props.get("title", label)),
+                            title=title,
+                            color="#%06x" % (hash(label) & 0xFFFFFF)
+                        )
                         nodes.add(node_id)
+
                 for rel in value.relationships:
-                    net.add_edge(str(rel.start_node.id), str(rel.end_node.id), label=rel.type)
-    
+                    net.add_edge(
+                        str(rel.start_node.id),
+                        str(rel.end_node.id),
+                        label=rel.type
+                    )
+
+    # Set Pyvis options for better layout and style
+    net.set_options("""
+    var options = {
+      layout: { improvedLayout: true },
+      nodes: {
+        shape: 'dot',
+        size: 20,
+        font: { size: 16, color: '#000000' },
+        borderWidth: 2
+      },
+      edges: {
+        width: 2,
+        smooth: {
+          type: "cubicBezier",
+          forceDirection: "horizontal",
+          roundness: 0.4
+        }
+      },
+      physics: {
+        forceAtlas2Based: {
+          gravitationalConstant: -50,
+          centralGravity: 0.005,
+          springLength: 230,
+          springConstant: 0.18
+        },
+        maxVelocity: 50,
+        solver: 'forceAtlas2Based',
+        timestep: 0.35,
+        stabilization: { iterations: 150 }
+      }
+    }
+    """)
+
     return net
 
-# UI
-st.title("Neo4j + Streamlit + Pyvis")
+# Streamlit UI
+st.set_page_config(layout="wide")
+st.title("🧠 Neo4j + Streamlit + Pyvis Graph")
 
-query = st.text_area("Enter a Cypher Query", "MATCH p=(a)-[r]->(b) RETURN p LIMIT 10")
+# Input field
+query = st.text_area("Enter a Cypher Query", "MATCH p=(a)-[r]->(b) RETURN p LIMIT 25")
 
+# Run button
 if st.button("Run Query"):
     try:
         results = run_query(query)
         st.success("Query executed successfully!")
 
+        # Build and display graph
         net = visualize_graph(results)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
@@ -57,7 +112,7 @@ if st.button("Run Query"):
             with open(path, 'r', encoding='utf-8') as f:
                 html = f.read()
 
-        components.html(html, height=650, scrolling=True)
+        components.html(html, height=850, width=1200, scrolling=False)
         os.unlink(path)
 
     except Exception as e:
