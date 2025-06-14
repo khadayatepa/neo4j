@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 import tempfile
 import os
 
-# Load Neo4j credentials from secrets
+# Load credentials
 uri = st.secrets["neo4j"]["uri"]
 username = st.secrets["neo4j"]["username"]
 password = st.secrets["neo4j"]["password"]
@@ -13,12 +13,12 @@ password = st.secrets["neo4j"]["password"]
 # Connect to Neo4j
 driver = GraphDatabase.driver(uri, auth=(username, password))
 
-# Run query
+# Run Cypher query
 def run_query(query):
     with driver.session() as session:
         return list(session.run(query))
 
-# Build a Pyvis graph from Neo4j results
+# Build Pyvis graph from results
 def visualize_graph(results):
     net = Network(
         height="800px", width="100%",
@@ -34,7 +34,7 @@ def visualize_graph(results):
                 continue
             if hasattr(value, 'nodes') and hasattr(value, 'relationships'):
                 for node in value.nodes:
-                    node_id = str(node.id)
+                    node_id = str(node.element_id)
                     label = list(node.labels)[0] if node.labels else "Node"
                     props = dict(node)
                     title = "<br>".join(f"{k}: {v}" for k, v in props.items())
@@ -50,12 +50,11 @@ def visualize_graph(results):
 
                 for rel in value.relationships:
                     net.add_edge(
-                        str(rel.start_node.id),
-                        str(rel.end_node.id),
+                        str(rel.start_node.element_id),
+                        str(rel.end_node.element_id),
                         label=rel.type
                     )
 
-    # Set Pyvis options for better layout and style
     net.set_options("""
     var options = {
       layout: { improvedLayout: true },
@@ -92,18 +91,15 @@ def visualize_graph(results):
 
 # Streamlit UI
 st.set_page_config(layout="wide")
-st.title("🧠 Neo4j + Streamlit + Pyvis Graph")
+st.title("🧠 Neo4j + Streamlit + Pyvis Graph Viewer")
 
-# Input field
-query = st.text_area("Enter a Cypher Query", "MATCH p=(a)-[r]->(b) RETURN p LIMIT 25")
+query = st.text_area("Enter Cypher Query", "MATCH p=(a)-[r]->(b) RETURN p LIMIT 25")
 
-# Run button
 if st.button("Run Query"):
     try:
         results = run_query(query)
         st.success("Query executed successfully!")
 
-        # Build and display graph
         net = visualize_graph(results)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
