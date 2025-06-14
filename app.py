@@ -18,20 +18,14 @@ def run_query(query):
     with driver.session() as session:
         return list(session.run(query))
 
-# Build Pyvis graph from results
+# Build Pyvis graph
 def visualize_graph(results):
-    net = Network(
-        height="800px", width="100%",
-        bgcolor="#ffffff", font_color="black", notebook=False
-    )
-
-    net.barnes_hut()  # Force-directed layout
-
+    net = Network(height="800px", width="100%", bgcolor="#ffffff", font_color="black")
+    net.barnes_hut()
     nodes = set()
+
     for record in results:
         for value in record.values():
-            if isinstance(value, dict):
-                continue
             if hasattr(value, 'nodes') and hasattr(value, 'relationships'):
                 for node in value.nodes:
                     node_id = str(node.element_id)
@@ -86,7 +80,6 @@ def visualize_graph(results):
       }
     }
     """)
-
     return net
 
 # Streamlit UI
@@ -112,4 +105,3 @@ if st.button("Run Query"):
         os.unlink(path)
 
     except Exception as e:
-        st.error(f"Error: {e}")
