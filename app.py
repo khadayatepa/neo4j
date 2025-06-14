@@ -1,79 +1,27 @@
-def visualize_graph(results):
-    net = Network(
-        height="800px",
-        width="100%",
-        bgcolor="#111111",  # Dark background
-        font_color="white"
-    )
-    net.barnes_hut()
+import streamlit as st
+from neo4j import GraphDatabase
 
-    nodes = set()
-    label_colors = {}
+# Load credentials
+uri = st.secrets["neo4j"]["uri"]
+username = st.secrets["neo4j"]["username"]
+password = st.secrets["neo4j"]["password"]
 
-    def get_color(label):
-        if label not in label_colors:
-            # Assign vibrant random color
-            label_colors[label] = "#%06x" % random.randint(0x444444, 0xFFFFFF)
-        return label_colors[label]
+# Neo4j driver
+driver = GraphDatabase.driver(uri, auth=(username, password))
 
-    for record in results:
-        for value in record.values():
-            if hasattr(value, 'nodes') and hasattr(value, 'relationships'):
-                for node in value.nodes:
-                    node_id = str(node.element_id)
-                    label = list(node.labels)[0] if node.labels else "Node"
-                    props = dict(node)
-                    title = "<br>".join(f"{k}: {v}" for k, v in props.items())
+def run_query(query, parameters=None):
+    with driver.session() as session:
+        result = session.run(query, parameters or {})
+        return [record.data() for record in result]
 
-                    if node_id not in nodes:
-                        net.add_node(
-                            node_id,
-                            label=props.get("name", props.get("title", label)),
-                            title=title,
-                            color=get_color(label)
-                        )
-                        nodes.add(node_id)
+st.title("Neo4j + Streamlit Demo")
 
-                for rel in value.relationships:
-                    net.add_edge(
-                        str(rel.start_node.element_id),
-                        str(rel.end_node.element_id),
-                        label=rel.type,
-                        color={"color": "#%06x" % random.randint(0x666666, 0xFFFFFF)}
-                    )
+query = st.text_area("Cypher Query", "MATCH (n) RETURN n LIMIT 5")
 
-    # Force background using vis.js options
-    net.set_options("""
-    var options = {
-      layout: { improvedLayout: true },
-      nodes: {
-        shape: 'dot',
-        size: 20,
-        font: { size: 16, color: '#ffffff' },
-        borderWidth: 2
-      },
-      edges: {
-        color: { color: '#999999' },
-        width: 2,
-        smooth: {
-          type: "dynamic",
-          forceDirection: "none",
-          roundness: 0.3
-        }
-      },
-      physics: {
-        forceAtlas2Based: {
-          gravitationalConstant: -80,
-          centralGravity: 0.005,
-          springLength: 200,
-          springConstant: 0.18
-        },
-        maxVelocity: 75,
-        solver: 'forceAtlas2Based',
-        timestep: 0.4,
-        stabilization: { iterations: 200 }
-      }
-    }
-    """)
-
-    return net
+if st.button("Run Query"):
+    try:
+        results = run_query(query)
+        st.write("Results:")
+        st.json(results)
+    except Exception as e:
+        st.error(f"Error: {e}")
